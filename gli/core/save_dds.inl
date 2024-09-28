@@ -2,49 +2,49 @@
 #include "../load_dds.hpp"
 #include "file.hpp"
 
-namespace gli{
-namespace detail
-{
-	inline d3d10_resource_dimension get_dimension(gli::target Target)
+namespace gli {
+	namespace detail
 	{
-		static d3d10_resource_dimension Table[] = //TARGET_COUNT
+		inline d3d10_resource_dimension get_dimension(gli::target Target)
 		{
-			D3D10_RESOURCE_DIMENSION_TEXTURE1D,		//TARGET_1D,
-			D3D10_RESOURCE_DIMENSION_TEXTURE1D,		//TARGET_1D_ARRAY,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_2D,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_2D_ARRAY,
-			D3D10_RESOURCE_DIMENSION_TEXTURE3D,		//TARGET_3D,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_RECT,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_RECT_ARRAY,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_CUBE,
-			D3D10_RESOURCE_DIMENSION_TEXTURE2D		//TARGET_CUBE_ARRAY
-		};
-		static_assert(sizeof(Table) / sizeof(Table[0]) == TARGET_COUNT, "Table needs to be updated");
+			static d3d10_resource_dimension Table[] = //TARGET_COUNT
+			{
+				D3D10_RESOURCE_DIMENSION_TEXTURE1D,		//TARGET_1D,
+				D3D10_RESOURCE_DIMENSION_TEXTURE1D,		//TARGET_1D_ARRAY,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_2D,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_2D_ARRAY,
+				D3D10_RESOURCE_DIMENSION_TEXTURE3D,		//TARGET_3D,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_RECT,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_RECT_ARRAY,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D,		//TARGET_CUBE,
+				D3D10_RESOURCE_DIMENSION_TEXTURE2D		//TARGET_CUBE_ARRAY
+			};
+			static_assert(sizeof(Table) / sizeof(Table[0]) == TARGET_COUNT, "Table needs to be updated");
 
-		return Table[Target];
-	}
-	
-	inline dx::d3dfmt get_fourcc(bool RequireDX10Header, gli::format Format, dx::format const& DXFormat)
-	{
-		if(RequireDX10Header)
+			return Table[Target];
+		}
+
+		inline dx::d3dfmt get_fourcc(bool RequireDX10Header, gli::format Format, dx::format const& DXFormat)
 		{
-			detail::formatInfo const & FormatInfo = detail::get_format_info(Format);
-			
-			if(FormatInfo.Flags & detail::CAP_DDS_GLI_EXT_BIT)
-				return dx::D3DFMT_GLI1;
+			if (RequireDX10Header)
+			{
+				detail::formatInfo const& FormatInfo = detail::get_format_info(Format);
+
+				if (FormatInfo.Flags & detail::CAP_DDS_GLI_EXT_BIT)
+					return dx::D3DFMT_GLI1;
+				else
+					return dx::D3DFMT_DX10;
+			}
 			else
-				return dx::D3DFMT_DX10;
+			{
+				return (DXFormat.DDPixelFormat & dx::DDPF_FOURCC) ? DXFormat.D3DFormat : dx::D3DFMT_UNKNOWN;
+			}
 		}
-		else
-		{
-			return (DXFormat.DDPixelFormat & dx::DDPF_FOURCC) ? DXFormat.D3DFormat : dx::D3DFMT_UNKNOWN;
-		}
-	}
-}//namespace detail
+	}//namespace detail
 
 	inline bool save_dds(texture const& Texture, std::vector<char>& Memory)
 	{
-		if(Texture.empty())
+		if (Texture.empty())
 			return false;
 
 		dx DX;
@@ -69,15 +69,15 @@ namespace detail
 		Caps |= (Desc.Flags & detail::CAP_COMPRESSED_BIT) ? detail::DDSD_LINEARSIZE : detail::DDSD_PITCH;
 
 		std::uint32_t PitchInBytes = 0u;
-		if( ( Desc.Flags & detail::CAP_COMPRESSED_BIT ) )
+		if ((Desc.Flags & detail::CAP_COMPRESSED_BIT))
 		{
 			PitchInBytes = static_cast<std::uint32_t>(Texture.size() / Texture.faces());
 		}
 		else
 		{
 			const texture::extent_type& TextureExtent = Texture.extent();
-			const std::uint32_t BitsPerPixel = detail::bits_per_pixel( Texture.format() );
-			PitchInBytes = ( TextureExtent.x * BitsPerPixel ) / 8u;
+			const std::uint32_t BitsPerPixel = detail::bits_per_pixel(Texture.format());
+			PitchInBytes = (TextureExtent.x * BitsPerPixel) / 8u;
 		}
 
 		memset(Header.Reserved1, 0, sizeof(Header.Reserved1));
@@ -99,17 +99,19 @@ namespace detail
 		Header.CubemapFlags = 0;
 
 		// Cubemap
-		if(Texture.faces() > 1)
+		if (Texture.faces() > 1)
 		{
 			GLI_ASSERT(Texture.faces() == 6);
-			Header.CubemapFlags |= detail::DDSCAPS2_CUBEMAP_ALLFACES | detail::DDSCAPS2_CUBEMAP;
+			Header.CubemapFlags |=
+				static_cast<decltype(Header.CubemapFlags)>(detail::DDSCAPS2_CUBEMAP_ALLFACES)
+				| static_cast<decltype(Header.CubemapFlags)>(detail::DDSCAPS2_CUBEMAP);
 		}
 
 		// Texture3D
-		if(Texture.extent().z > 1)
+		if (Texture.extent().z > 1)
 			Header.CubemapFlags |= detail::DDSCAPS2_VOLUME;
 
-		if(RequireDX10Header)
+		if (RequireDX10Header)
 		{
 			detail::dds_header10& Header10 = *reinterpret_cast<detail::dds_header10*>(&Memory[0] + Offset);
 			Offset += sizeof(detail::dds_header10);
@@ -128,11 +130,11 @@ namespace detail
 
 	inline bool save_dds(texture const& Texture, char const* Filename)
 	{
-		if(Texture.empty())
+		if (Texture.empty())
 			return false;
 
 		FILE* File = detail::open_file(Filename, "wb");
-		if(!File)
+		if (!File)
 			return false;
 
 		std::vector<char> Memory;
